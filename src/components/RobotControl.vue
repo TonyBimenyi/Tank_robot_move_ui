@@ -1,57 +1,141 @@
 <template>
   <div class="mission-control">
-    <div class="header">
-      <span class="status-dot">●</span> ROV-1 | MISSION CTRL
-      <span class="battery">⏻ {{ batteryLevel }}%</span>
-    </div>
+    <MissionHeader
+      title="ROV-1"
+      subtitle="Mission Control · Control"
+      :robotIP="robotIP"
+      :batteryPercent="batteryLevel"
+    />
 
-    <div class="tabs">
-      <button class="tab active">CONTROL</button>
-      <button class="tab" @click="$emit('switch','telemetry')">TELEMETRY</button>
-    </div>
+    <MissionTabs active="control" @switch="$emit('switch', $event)" />
 
     <div class="status-box" :class="stateClass">
       {{ controlState }}
     </div>
 
-    <!-- Joystick -->
-    <div class="joystick-container">
-      <div
-        class="joystick-base"
-        ref="joystickBase"
-        @pointerdown="startDrag"
-        @pointerup="stop"
-        @pointercancel="stop"
-        @pointerleave="stop"
-        @pointermove="onDrag"
-      >
-        <div class="center"></div>
-        <div class="stick" :style="stickStyle"></div>
+    <div class="quick-bar">
+      <div class="quick-left">
+        <div class="chip">
+          <span class="chip-label">Speed</span>
+          <span class="chip-value">{{ pwmPercent }}%</span>
+        </div>
+        <div class="chip">
+          <span class="chip-label">Direction</span>
+          <span class="chip-value">{{ directionLabel }}</span>
+        </div>
       </div>
+
+      <button class="stop-btn" type="button" @click="stop">
+        <span class="btn-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7 7h10v10H7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span>STOP</span>
+      </button>
     </div>
 
-    <!-- PWM -->
-    <div class="pwm-section">
-      <div class="pwm-label">PWM SPEED</div>
-      <div class="pwm-value">{{ pwm }}</div>
-      <input type="range" min="0" max="255" v-model.number="pwm" class="pwm-slider" />
-      <div class="pwm-scale">
-        <span>0</span>
-        <span>255</span>
+    <div class="grid">
+      <div class="card joystick-card">
+        <div class="card-head">
+          <div class="card-title">Drive</div>
+          <div class="badge">{{ dragging ? "DRIVING" : "JOYSTICK" }}</div>
+        </div>
+
+        <div class="joystick-container">
+          <div
+            class="joystick-base"
+            ref="joystickBase"
+            @pointerdown="startDrag"
+            @pointerup="stop"
+            @pointercancel="stop"
+            @pointerleave="stop"
+            @pointermove="onDrag"
+          >
+            <div class="center"></div>
+            <div class="stick" :style="stickStyle"></div>
+          </div>
+        </div>
+
+        <div class="drive-hints">
+          <div class="hint">
+            <span class="hint-key">↑↓←→</span>
+            <span class="hint-text">Keyboard drive</span>
+          </div>
+          <div class="hint">
+            <span class="hint-key">SPACE</span>
+            <span class="hint-text">Stop</span>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Arrow buttons -->
-    <div class="arrow-buttons">
-      <button class="arrow-btn" @pointerdown="setDirectionManual('left')" @pointerup="stop">← LEFT</button>
-      <button class="arrow-btn" @pointerdown="setDirectionManual('right')" @pointerup="stop">RIGHT →</button>
-    </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">PWM Speed</div>
+          <div class="badge">0–255</div>
+        </div>
 
-    <button class="emergency" @click="emergencyStop">○ EMERGENCY STOP</button>
+        <div class="pwm-value">{{ pwm }}</div>
+        <input type="range" min="0" max="255" v-model.number="pwm" class="pwm-slider" />
+        <div class="pwm-scale">
+          <span>0</span>
+          <span>255</span>
+        </div>
 
-    <div class="robot-ip">
-      <span class="icon">✦</span> ROBOT IP
-      <span class="ip-value">{{ robotIP }}</span>
+        <div class="preset-row">
+          <button class="preset" type="button" :class="{ active: pwm === 64 }" @click="setPwm(64)">25%</button>
+          <button class="preset" type="button" :class="{ active: pwm === 128 }" @click="setPwm(128)">50%</button>
+          <button class="preset" type="button" :class="{ active: pwm === 192 }" @click="setPwm(192)">75%</button>
+          <button class="preset" type="button" :class="{ active: pwm === 255 }" @click="setPwm(255)">MAX</button>
+        </div>
+
+        <div class="nudge-row">
+          <button class="nudge" type="button" @click="setPwm(pwm - 10)">
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M8.5 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span>-10</span>
+          </button>
+          <button class="nudge" type="button" @click="setPwm(pwm + 10)">
+            <span>+10</span>
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 8.5v7M8.5 12h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+          </button>
+        </div>
+
+        <div class="arrow-buttons">
+          <button class="arrow-btn" @pointerdown="setDirectionManual('left')" @pointerup="stop">
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M14.5 6.5 9 12l5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span>LEFT</span>
+          </button>
+          <button class="arrow-btn" @pointerdown="setDirectionManual('right')" @pointerup="stop">
+            <span>RIGHT</span>
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M9.5 6.5 15 12l-5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </button>
+        </div>
+
+        <button class="emergency" @click="emergencyStop">
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7 7h10v10H7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span>EMERGENCY STOP</span>
+        </button>
+      </div>
     </div>
 
     <div class="footer-bar">
@@ -62,11 +146,15 @@
 
 <script>
 import axios from "axios";
+import MissionHeader from "./MissionHeader.vue"
+import MissionTabs from "./MissionTabs.vue"
 
 export default {
   name: "RobotControl",
+  components: { MissionHeader, MissionTabs },
   props: {
-    updatePwmTelemetry: { type: Function, required: true } // send PWM to Telemetry
+    updatePwmTelemetry: { type: Function, required: true }, // send PWM to Telemetry
+    addLog: { type: Function, default: () => {} },
   },
   data() {
     return {
@@ -77,6 +165,7 @@ export default {
       robotIP: "http://192.168.4.1",
       currentDir: "Z",
       batteryLevel: 0,
+      batteryInterval: null,
     };
   },
   computed: {
@@ -88,6 +177,25 @@ export default {
         transform: `translate(calc(-50% + ${this.stickPos.x}px), calc(-50% + ${this.stickPos.y}px))`,
       };
     },
+    pwmPercent() {
+      return Math.round((Math.max(0, Math.min(255, this.pwm)) / 255) * 100)
+    },
+    directionLabel() {
+      const map = {
+        A: "FWD-R",
+        B: "FWD",
+        C: "RIGHT",
+        D: "BWD-R",
+        E: "BWD",
+        F: "BWD-L",
+        G: "LEFT",
+        H: "FWD-L",
+        Z: "IDLE",
+        left: "LEFT",
+        right: "RIGHT",
+      }
+      return map[this.currentDir] ?? "—"
+    },
   },
   watch: {
     pwm(newVal) {
@@ -96,6 +204,52 @@ export default {
     },
   },
   methods: {
+    setPwm(value) {
+      const next = Math.max(0, Math.min(255, Math.round(value)))
+      this.pwm = next
+    },
+    handleKeydown(e) {
+      const tag = document.activeElement?.tagName?.toLowerCase()
+      if (tag === "input" || tag === "textarea" || tag === "select") return
+      if (e.repeat) return
+
+      if (e.code === "Space") {
+        e.preventDefault()
+        this.stop()
+        return
+      }
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault()
+        this.setDirectionManual("left")
+        return
+      }
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault()
+        this.setDirectionManual("right")
+        return
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        this.controlState = "MOVING forward"
+        axios.get(`${this.robotIP}/forward`, { params: { pwm: this.pwm } }).catch(() => {})
+        return
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        this.controlState = "MOVING backward"
+        axios.get(`${this.robotIP}/backward`, { params: { pwm: this.pwm } }).catch(() => {})
+      }
+    },
+    handleKeyup(e) {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault()
+        this.stop()
+      }
+    },
     startDrag(e) {
       this.dragging = true;
       this.updateStick(e);
@@ -128,6 +282,7 @@ export default {
         this.currentDir = "Z";
         this.controlState = "IDLE";
         axios.get(`${this.robotIP}/stop`).catch(() => {});
+        this.addLog({ level: "info", source: "control", message: "stop" })
         return;
       }
 
@@ -158,6 +313,7 @@ export default {
       };
 
       axios.get(`${this.robotIP}/${map[dir]}`, { params: { pwm: this.pwm } }).catch(() => {});
+      this.addLog({ level: "info", source: "control", message: `move ${map[dir]} (pwm=${this.pwm})` })
     },
     stop() {
       this.dragging = false;
@@ -165,12 +321,14 @@ export default {
       this.currentDir = "Z";
       this.controlState = "IDLE";
       axios.get(`${this.robotIP}/stop`).catch(() => {});
+      this.addLog({ level: "info", source: "control", message: "stop" })
     },
     emergencyStop() {
       this.stop();
       this.pwm = 0;
       this.controlState = "EMERGENCY STOP";
       console.log("!!! EMERGENCY STOP !!!");
+      this.addLog({ level: "warn", source: "control", message: "EMERGENCY STOP" })
     },
     setDirectionManual(dir) {
       this.currentDir = dir;
@@ -178,6 +336,7 @@ export default {
       this.stickPos = { x: dir === "right" ? 40 : dir === "left" ? -40 : 0, y: 0 };
       const map = { left: "left", right: "right" };
       axios.get(`${this.robotIP}/${map[dir]}`, { params: { pwm: this.pwm } }).catch(() => {});
+      this.addLog({ level: "info", source: "control", message: `move ${map[dir]} (pwm=${this.pwm})` })
     },
     fetchBatteryStatus() {
       axios.get(`${this.robotIP}/battery`)
@@ -188,96 +347,163 @@ export default {
     },
   },
   mounted() {
-    setInterval(this.fetchBatteryStatus, 1000);
+    this.batteryInterval = setInterval(this.fetchBatteryStatus, 1000);
+    window.addEventListener("keydown", this.handleKeydown, { passive: false })
+    window.addEventListener("keyup", this.handleKeyup, { passive: false })
+  },
+  beforeUnmount() {
+    clearInterval(this.batteryInterval)
+    window.removeEventListener("keydown", this.handleKeydown)
+    window.removeEventListener("keyup", this.handleKeyup)
   },
 };
 </script>
 <style scoped>
 .mission-control {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0a0e17;
-  color: #d0d8e0;
+  font-family: var(--mc-font);
+  background: var(--mc-bg-gradient);
+  color: var(--mc-text);
   min-height: 100vh;
-  padding: 12px 16px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
   touch-action: manipulation;
 }
 
-.header {
+.grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.card {
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--mc-shadow);
+}
+
+.card-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  gap: 10px;
 }
 
-.status-dot {
-  color: #ff3b30;
-  margin-right: 6px;
+.card-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
 }
 
-.battery {
-  color: #34c759;
+.badge {
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #08111f;
+  background: linear-gradient(135deg, var(--mc-accent), var(--mc-accent-2));
 }
 
-.tabs {
+.joystick-card {
   display: flex;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.tab {
-  background: #1c2333;
-  border: none;
-  color: #8a96a8;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 500;
-}
-
-.tab.active {
-  background: #0066ff;
-  color: white;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .status-box {
-  background: #1a2238;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
   text-align: center;
-  padding: 16px;
-  border-radius: 12px;
-  font-size: 1.4rem;
-  font-weight: bold;
-  margin: 12px 0;
+  padding: 14px 12px;
+  border-radius: 14px;
+  font-size: 1.25rem;
+  font-weight: 800;
   letter-spacing: 1px;
 }
 
 .status-box.idle {
-  color: #8a96a8;
-  background: #1a2238;
+  color: var(--mc-muted);
 }
 
 .status-box.active {
   color: #00ff9d;
   background: rgba(0, 255, 157, 0.12);
+  border-color: rgba(0, 255, 157, 0.25);
 }
 
-/* Joystick */
+.quick-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.quick-left {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  box-shadow: var(--mc-shadow);
+}
+
+.chip-label {
+  color: var(--mc-muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.chip-value {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.stop-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(20, 27, 43, 0.45);
+  border: 1px solid rgba(42, 53, 77, 0.95);
+  color: var(--mc-text);
+  font-weight: 900;
+}
+
+.stop-btn:active {
+  transform: translateY(1px);
+}
+
 .joystick-container {
   position: relative;
   width: 100%;
-  max-width: 280px;
-  margin: 0 auto 20px;
+  max-width: 320px;
+  margin: 6px auto 8px;
   aspect-ratio: 1 / 1;
 }
 
 .joystick-base {
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at 50% 50%, #1c2333, #0f1625);
+  background: radial-gradient(circle at 50% 50%, rgba(28, 35, 51, 0.9), rgba(15, 22, 37, 0.9));
   border-radius: 50%;
-  border: 2px solid #2a354d;
+  border: 1px solid rgba(42, 53, 77, 0.95);
   position: relative;
   overflow: hidden;
   touch-action: none;
@@ -287,11 +513,11 @@ export default {
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 60px;
-  height: 60px;
-  background: radial-gradient(circle, #2a354d, #1a2238);
+  width: 66px;
+  height: 66px;
+  background: radial-gradient(circle, rgba(42, 53, 77, 0.9), rgba(20, 27, 43, 0.9));
   border-radius: 50%;
-  border: 2px solid #3a475f;
+  border: 1px solid rgba(58, 71, 95, 0.9);
   pointer-events: none;
 }
 
@@ -299,9 +525,9 @@ export default {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 48px;
-  height: 48px;
-  background: #0066ff;
+  width: 54px;
+  height: 54px;
+  background: linear-gradient(135deg, #0066ff, #00aaff);
   border-radius: 50%;
   box-shadow: 0 0 20px rgba(0, 102, 255, 0.6);
   transform: translate(-50%, -50%);
@@ -309,33 +535,50 @@ export default {
   pointer-events: none;
 }
 
-/* PWM Section */
-.pwm-section {
-  margin: 16px 0;
-  background: #141b2b;
-  padding: 16px;
-  border-radius: 12px;
+.drive-hints {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 10px;
+  flex-wrap: wrap;
 }
 
-.pwm-label {
-  font-size: 0.9rem;
-  color: #8a96a8;
-  margin-bottom: 6px;
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(42, 53, 77, 0.75);
+  background: rgba(20, 27, 43, 0.45);
+  color: rgba(208, 216, 224, 0.92);
+  font-weight: 800;
+}
+
+.hint-key {
+  color: var(--mc-accent);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.hint-text {
+  color: var(--mc-muted);
+  font-weight: 800;
 }
 
 .pwm-value {
-  font-size: 1.8rem;
-  font-weight: bold;
-  color: #00aaff;
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--mc-accent);
   text-align: center;
-  margin-bottom: 8px;
+  margin: 8px 0 10px;
 }
 
 .pwm-slider {
   width: 100%;
   height: 12px;
   -webkit-appearance: none;
-  background: #2a354d;
+  background: rgba(42, 53, 77, 0.95);
   border-radius: 6px;
   outline: none;
 }
@@ -344,7 +587,7 @@ export default {
   -webkit-appearance: none;
   width: 24px;
   height: 24px;
-  background: #00aaff;
+  background: var(--mc-accent);
   border-radius: 50%;
   box-shadow: 0 0 12px rgba(0, 170, 255, 0.6);
   cursor: pointer;
@@ -358,50 +601,108 @@ export default {
   margin-top: 6px;
 }
 
-/* Arrow Buttons */
+.preset-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.preset {
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 53, 77, 0.95);
+  background: rgba(20, 27, 43, 0.45);
+  color: var(--mc-text);
+  font-weight: 900;
+}
+
+.preset.active {
+  background: var(--mc-accent-gradient);
+  border-color: rgba(0, 170, 255, 0.55);
+}
+
+.preset:active {
+  transform: translateY(1px);
+}
+
+.nudge-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.nudge {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 53, 77, 0.95);
+  background: rgba(20, 27, 43, 0.45);
+  color: var(--mc-text);
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.nudge:active {
+  transform: translateY(1px);
+}
+
 .arrow-buttons {
   display: flex;
   gap: 12px;
-  margin: 16px 0;
+  margin: 14px 0 10px;
 }
 
 .arrow-btn {
   flex: 1;
-  background: #1c2333;
-  border: 1px solid #3a475f;
-  color: #a0b0c8;
-  padding: 14px;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 1rem;
+  background: rgba(20, 27, 43, 0.6);
+  border: 1px solid rgba(42, 53, 77, 0.95);
+  color: var(--mc-text);
+  padding: 12px 12px;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 0.98rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.arrow-btn:active {
+  transform: translateY(1px);
+}
+
+.btn-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+}
+
+.btn-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .emergency {
   width: 100%;
-  background: #ff2d55;
+  background: linear-gradient(135deg, var(--mc-danger-2), var(--mc-danger));
   color: white;
   border: none;
-  padding: 18px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  border-radius: 12px;
-  margin: 16px 0;
-  box-shadow: 0 4px 12px rgba(255, 45, 85, 0.35);
-}
-
-.robot-ip {
-  background: #1a2238;
-  padding: 12px 16px;
-  border-radius: 10px;
-  display: flex;
+  padding: 16px 14px;
+  font-size: 1.08rem;
+  font-weight: 900;
+  border-radius: 14px;
+  margin-top: 8px;
+  box-shadow: 0 10px 22px -14px rgba(255, 45, 85, 0.6);
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  font-size: 0.95rem;
-}
-
-.ip-value {
-  color: #00ff9d;
-  font-weight: 500;
 }
 
 .footer-bar {
@@ -410,6 +711,16 @@ export default {
   text-align: center;
   color: #5a6b8c;
   font-size: 0.85rem;
-  border-top: 1px solid #2a354d;
+  border-top: 1px solid var(--mc-border);
 }
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .preset-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 </style>
